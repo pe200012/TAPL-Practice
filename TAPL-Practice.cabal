@@ -1,0 +1,62 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: f23229702c43f684efe099cb55c2dbd2e744365ac38e4d5112a240b4b6926f93
+
+name:           TAPL-Practice
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/TAPL-Practice#readme>
+homepage:       https://github.com/githubuser/TAPL-Practice#readme
+bug-reports:    https://github.com/githubuser/TAPL-Practice/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2021 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/TAPL-Practice
+
+library
+  exposed-modules:
+      Lib
+  other-modules:
+      Paths_TAPL_Practice
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+  default-language: Haskell2010
+
+executable TAPL-Practice-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_TAPL_Practice
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      TAPL-Practice
+    , base >=4.7 && <5
+  default-language: Haskell2010
+
+test-suite TAPL-Practice-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_TAPL_Practice
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      TAPL-Practice
+    , base >=4.7 && <5
+  default-language: Haskell2010

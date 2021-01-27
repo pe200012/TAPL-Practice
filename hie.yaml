@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "TAPL-Practice:lib"
+
+    - path: "./app/Main.hs"
+      component: "TAPL-Practice:exe:TAPL-Practice-exe"
+
+    - path: "./app/Paths_TAPL_Practice.hs"
+      component: "TAPL-Practice:exe:TAPL-Practice-exe"
+
+    - path: "./test"
+      component: "TAPL-Practice:test:TAPL-Practice-test"
