@@ -4,16 +4,16 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f23229702c43f684efe099cb55c2dbd2e744365ac38e4d5112a240b4b6926f93
+-- hash: 4e05444e35d679cbeee1923efa6c981dcdb5d7a285524a6e563d7a70d08c6ead
 
 name:           TAPL-Practice
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/TAPL-Practice#readme>
-homepage:       https://github.com/githubuser/TAPL-Practice#readme
-bug-reports:    https://github.com/githubuser/TAPL-Practice/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2021 Author name here
+homepage:       https://github.com/pe200012/TAPL-Practice#readme
+bug-reports:    https://github.com/pe200012/TAPL-Practice/issues
+author:         pe200012
+maintainer:     pe1326263755@gmail.com
+copyright:      2021 pe200012
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -23,7 +23,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/TAPL-Practice
+  location: https://github.com/pe200012/TAPL-Practice
 
 library
   exposed-modules:
@@ -33,7 +33,8 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      QuickCheck
+    , base >=4.7 && <5
   default-language: Haskell2010
 
 executable TAPL-Practice-exe
@@ -44,7 +45,8 @@ executable TAPL-Practice-exe
       app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      TAPL-Practice
+      QuickCheck
+    , TAPL-Practice
     , base >=4.7 && <5
   default-language: Haskell2010
 
@@ -57,6 +59,7 @@ test-suite TAPL-Practice-test
       test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      TAPL-Practice
+      QuickCheck
+    , TAPL-Practice
     , base >=4.7 && <5
   default-language: Haskell2010
