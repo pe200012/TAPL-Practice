@@ -103,3 +103,26 @@ or = abstract (\b -> abstract (\c -> apply (apply (b, tru), apply (apply (c, tru
 
 not :: Term
 not = abstract (\b -> apply (apply (b, fls), tru))
+
+{-
+>>> pair' a b = apply (apply (pair, a), b)
+>>> fst' p = apply (fst, p)
+>>> snd' p = apply (snd, p)
+>>> p = pair' (var "a") (var "b")
+
+>>> debug (fst' p)
+Variable a
+
+>>> debug (snd' p)
+Variable b
+
+-}
+
+pair :: Term
+pair = abstract (\f -> abstract (\s -> abstract (\b -> apply (apply (b, f), s))))
+
+fst :: Term
+fst = abstract (\p -> apply (p, tru))
+
+snd :: Term
+snd = abstract (\p -> apply (p, fls))
