@@ -1,14 +1,17 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module UntypedLambdaCalculus where
 
-
-import           Prelude                        ( (++)
+import           Prelude                        ( (+)
+                                                , (++)
                                                 , (.)
+                                                , Bool(False, True)
                                                 , IO
+                                                , Int
                                                 , Monad(..)
                                                 , Show(..)
                                                 , String
                                                 , const
+                                                , error
                                                 , id
                                                 , undefined
                                                 )
@@ -188,6 +191,9 @@ c_1 = abstract (\s -> abstract (\z -> apply (s, z)))
 c_2 :: Term
 c_2 = abstract (\s -> abstract (\z -> apply (s, apply (s, z))))
 
+c_3 :: Term
+c_3 = abstract (\s -> abstract (\z -> apply (s, apply (s, apply (s, z)))))
+
 scc :: Term
 scc = abstract (\n -> abstract (\s -> abstract (\z -> apply (s, apply (apply (n, s), z)))))
 
@@ -271,3 +277,54 @@ cc = abstract (\a -> abstract (\b -> let cl = apply (snd, b) in apply (apply (pa
 
 tail :: Term
 tail = abstract (\ls -> apply (fst, apply (apply (ls, cc), emptyL)))
+
+{-
+
+>>> realBool tru
+True
+
+>>> realBool fls
+False
+
+>>> debug (trueorfalse (churchBool True))
+Variable true
+
+>>> debug (trueorfalse (churchBool False))
+Variable false
+
+>>> realNat c_0
+0
+
+>>> realNat c_1
+1
+
+>>> realNat (apply (apply (times, c_2), c_3))
+6
+
+>>> realNat (apply (apply (power, c_2), c_3))
+8
+
+-}
+
+realBool :: Term -> Bool
+realBool t = case debug (apply (apply (t, var "true"), var "false")) of
+    Variable "true"  -> True
+    Variable "false" -> False
+    x                -> error ("realBool, Not a boolean value:" ++ show x)
+
+churchBool :: Bool -> Term
+churchBool b = if b then tru else fls
+
+realEq :: Term -> Term -> Bool
+realEq a b = case debug (apply (apply (apply (apply (equal, a), b), var "true"), var "false")) of
+    Variable "true"  -> True
+    Variable "false" -> False
+    x                -> error ("realEq, Not a numerical value:" ++ show x)
+
+realNat :: Term -> Int
+realNat t = go t 0
+  where
+    go a c = case debug (apply (apply (apply (iszro, a), var "true"), var "false")) of
+        Variable "true"  -> c
+        Variable "false" -> go (apply (prd, a)) (c + 1)
+        x                -> error ("realNat, Not a numerical value:" ++ show x)
