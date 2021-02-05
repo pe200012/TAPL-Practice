@@ -2,9 +2,17 @@
 module UntypedLambdaCalculus where
 
 
+import           Prelude                        ( (++)
+                                                , (.)
+                                                , IO
+                                                , Monad(..)
+                                                , Show(..)
+                                                , String
+                                                , const
+                                                , id
+                                                , undefined
+                                                )
 
-
-import Prelude (String, Show(show), (++), const, undefined)
 type Name = String
 
 data Term = Variable Name
@@ -172,7 +180,7 @@ Variable true
 -}
 
 c_0 :: Term
-c_0 = abstract (\s -> abstract (\z -> z))
+c_0 = fls
 
 c_1 :: Term
 c_1 = abstract (\s -> abstract (\z -> apply (s, z)))
@@ -208,7 +216,58 @@ subtract :: Term
 subtract = abstract (\m -> abstract (\n -> apply (apply (n, prd), m)))
 
 equal :: Term
-equal = abstract (\m -> abstract (\n -> apply (apply (and, r m n), r n m)))
-    where r m n = apply (iszro, apply (apply (subtract, m), n))
+equal = abstract (\m -> abstract (\n -> apply (apply (and, r m n), r n m))) where r m n = apply (iszro, apply (apply (subtract, m), n))
 
+{-
 
+>>> single = apply (apply (cons, c_0), nil)
+
+>>> debug (trueorfalse (apply (isNil, nil)))
+Variable true
+
+>>> debug (trueorfalse (apply (isNil, apply (apply (cons, c_1), nil))))
+Variable false
+
+>>> debug (trueorfalse (apply (isNil, apply (head, nil))))
+Variable true
+
+>>> debug (trueorfalse (apply (apply (equal, c_1), apply (head, apply (apply (cons, c_1), nil)))))
+Variable true
+
+>>> debug (trueorfalse (apply (apply (equal, c_2), apply (head, apply (apply (cons, c_1), nil)))))
+Variable false
+
+>>> debug (trueorfalse (apply (isNil, apply (tail, nil))))
+Variable true
+
+>>> debug (trueorfalse (apply (isNil, apply (tail, apply (apply (cons, c_1), nil)))))
+Variable true
+
+>>> debug (trueorfalse (apply (isNil, apply (apply (cons, c_1), apply (apply (cons, c_1), nil)))))
+Variable false
+
+>>> debug (trueorfalse (apply (isNil, apply (apply (cons, c_1),(apply (apply (cons, c_1), apply (apply (cons, c_1), nil)))))))
+Variable false
+
+-}
+
+nil :: Term
+nil = fls
+
+isNil :: Term
+isNil = abstract (\ls -> apply (apply (ls, hole), tru)) where hole = abstract (const (abstract (const fls)))
+
+cons :: Term
+cons = abstract (\h -> abstract (\ls -> abstract (\c -> abstract (\n -> apply (apply (c, h), apply (apply (ls, c), n))))))
+
+head :: Term
+head = abstract (\ls -> apply (apply (ls, tru), nil))
+
+emptyL :: Term
+emptyL = apply (apply (pair, nil), nil)
+
+cc :: Term
+cc = abstract (\a -> abstract (\b -> let cl = apply (snd, b) in apply (apply (pair, cl), apply (apply (cons, a), cl))))
+
+tail :: Term
+tail = abstract (\ls -> apply (fst, apply (apply (ls, cc), emptyL)))
