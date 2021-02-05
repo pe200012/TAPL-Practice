@@ -1,8 +1,10 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module UntypedLambdaCalculus where
 
+
 import           Prelude                        ( (+)
                                                 , (++)
+                                                , (-)
                                                 , (.)
                                                 , Bool(False, True)
                                                 , IO
@@ -14,6 +16,8 @@ import           Prelude                        ( (+)
                                                 , error
                                                 , id
                                                 , undefined
+                                                , foldr
+                                                , (<$>)
                                                 )
 
 type Name = String
@@ -322,9 +326,57 @@ realEq a b = case debug (apply (apply (apply (apply (equal, a), b), var "true"),
     x                -> error ("realEq, Not a numerical value:" ++ show x)
 
 realNat :: Term -> Int
-realNat t = go t 0
+realNat t = go (debug t) 0
   where
     go a c = case debug (apply (apply (apply (iszro, a), var "true"), var "false")) of
         Variable "true"  -> c
-        Variable "false" -> go (apply (prd, a)) (c + 1)
+        Variable "false" -> go (debug (apply (prd, a))) (c + 1)
         x                -> error ("realNat, Not a numerical value:" ++ show x)
+
+churchNat :: Int -> Term
+churchNat 0 = c_0
+churchNat n = apply (scc, churchNat (n - 1))
+
+{-
+
+-- >>> g = abstract (\fct -> abstract (\n -> if realEq n c_0 then c_1 else apply (apply (times, n), apply (fct, apply (prd, n)))))
+>>> g = abstract (\fct -> abstract (\n -> apply (apply (apply (apply (equal, n), c_0), c_1), apply (apply (times, n), apply (fct, apply (prd, n))))))
+>>> factorial = apply (fix, g)
+
+>>> realNat (apply (factorial, c_0))
+1
+
+>>> realNat (apply (factorial, churchNat 1))
+1
+
+-- Wow, it takes so long to compute!
+>>> realNat (apply (factorial, churchNat 5))
+120
+
+>>> sum = abstract (\ls -> apply (apply (ls, plus), c_0))
+>>> sums = abstract (\lls -> apply (apply (lls, hole), c_0)) where hole = abstract (\a -> abstract (\b -> apply (apply (plus, b), apply (sum, a))))
+>>> l1 = foldr (\a b -> apply (apply (cons, a), b)) nil (churchNat <$> [1..10])
+>>> l2 = foldr (\a b -> apply (apply (cons, a), b)) nil ([l1,l1])
+
+>>> realNat (apply (sum, l1))
+55
+
+>>> realNat (apply (sum, apply (tail, l1)))
+54
+
+>>> realNat (apply (sums, l2))
+110
+
+-}
+
+omega :: Term
+omega = apply (a, a) where a = abstract (\x -> apply (x, x))
+
+y :: Term
+y = abstract (\f -> apply (hole f, hole f)) where hole f = abstract (\x -> apply (f, apply (x, x)))
+
+v :: Term
+v = abstract (\f -> apply (hole f, hole f)) where hole f = abstract (\x -> apply (f, abstract (\y -> apply (apply (x, x), y))))
+
+fix :: Term
+fix = v
