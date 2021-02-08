@@ -1,27 +1,46 @@
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 module UntypedLambdaCalculus where
 
 
-import           Prelude                        ( (+)
-                                                , (++)
-                                                , (-)
-                                                , (.)
-                                                , Bool(False, True)
-                                                , IO
-                                                , Int
-                                                , Monad(..)
-                                                , Show(..)
-                                                , String
-                                                , const
-                                                , error
-                                                , id
-                                                , undefined
-                                                , foldr
-                                                , (<$>)
+import           Control.Monad.State.Lazy       ( State
+                                                , StateT
+                                                , get
+                                                , modify
+                                                , runState
                                                 )
+import           Data.HashMap.Lazy              ( HashMap
+                                                , empty
+                                                , insert
+                                                , lookup
+                                                )
+import           Data.Maybe                     ( fromMaybe, isNothing, isJust, fromJust )
+import           Data.Set                       ( Set
+                                                , delete
+                                                , member
+                                                , notMember
+                                                , singleton
+                                                , union
+                                                )
+import           Data.Text.Format               ( format )
+import           Data.Text.Lazy                 ( unpack )
+import           Prelude                 hiding ( and
+                                                , fst
+                                                , head
+                                                , lookup
+                                                , not
+                                                , or
+                                                , snd
+                                                , subtract
+                                                , tail
+                                                )
+import qualified Prelude
+import Control.Monad (when)
 
 type Name = String
 
+-- | Lambda term definition, borrowing host language's lambda feature to implement substituition
 data Term = Variable Name
           | Abstraction (Term -> Term)
           | Application (Term, Term)
@@ -380,3 +399,167 @@ v = abstract (\f -> apply (hole f, hole f)) where hole f = abstract (\x -> apply
 
 fix :: Term
 fix = v
+
+-- | Lambda term, writing from scratch
+data Term2 = Variable2 Name
+           | Abstraction2 (Name, Term2)
+           | Application2 (Term2, Term2)
+           deriving Show
+
+prettyTerm2 :: Term2 -> String
+prettyTerm2 (Variable2    a     ) = a
+prettyTerm2 (Abstraction2 (a, t)) = unpack (format "(λ{}. {})" [a, prettyTerm2 t])
+prettyTerm2 (Application2 (a, b)) = unpack (format "{} {}" (prettyTerm2 <$> [a, b]))
+
+{-
+
+>>> showHelper = (error . prettyTerm2) :: Term2 -> ()
+
+>>> fv (Variable2 "a")
+fromList ["a"]
+
+>>> fv (Application2 (Variable2 "a", Variable2 "b"))
+fromList ["a","b"]
+
+>>> fv (Abstraction2 ("a", Variable2 "a"))
+fromList []
+
+>>> fv (Abstraction2 ("a", Variable2 "b"))
+fromList ["b"]
+
+>>> subst (Variable2 "a") ("a", Variable2 "b")
+Variable2 "b"
+
+>>> subst (Variable2 "a") ("b", Variable2 "b")
+Variable2 "a"
+
+>>> showHelper (subst (Abstraction2 ("y", Variable2 "x")) ("x", Abstraction2 ("z", Application2 (Variable2 "z", Variable2 "w"))))
+(λy. (λz. z w))
+
+>>> showHelper (subst (Abstraction2 ("x", Variable2 "x")) ("x", Variable2 "y"))
+(λx. x)
+
+>>> showHelper (subst (Abstraction2 ("y", Application2 (Variable2 "x", Variable2 "y"))) ("x", Application2 (Variable2 "y", Variable2 "z")))
+(λaa. y z aa)
+
+>>> showHelper (evalFull (Variable2 "a"))
+a
+
+>>> showHelper (evalFull (Abstraction2 ("x", Variable2 "x")))
+(λx. x)
+
+>>> showHelper (evalFull (Application2 (Abstraction2 ("x", Variable2 "x"), Variable2 "y")))
+y
+
+>>> showHelper (evalFull (Application2 (Variable2 "x", Variable2 "y")))
+x y
+
+>>> id2 = Abstraction2 ("x", Variable2 "x")
+>>> showHelper (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
+(λx. x) (λx. x) (λz. (λx. x) z)
+
+>>> showHelper $ evalFull (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
+(λz. z)
+
+>>> showHelper $ evalNormal (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
+(λz. z)
+
+-- evaluation trace
+-- (λx. x) (λx. x) (λz. (λx. x) z)
+-- (λx. x) (λz. (λx. x) z)
+-- (λz. (λx. x) z)
+-- (λz. z)
+
+>>> showHelper $ evalCallByName (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
+(λz. (λx. x) z)
+
+-- evaluation trace
+-- (λx. x) (λx. x) (λz. (λx. x) z)
+-- (λx. x) (λz. (λx. x) z)
+-- (λz. (λx. x) z)
+
+>>> evalLazy (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
+(Variable2 "x",fromList [("x",Application2 (Abstraction2 ("x",Variable2 "x"),Abstraction2 ("z",Application2 (Abstraction2 ("x",Variable2 "x"),Variable2 "z"))))])
+
+-- x => (λx. x) (λz. (λx. x) z)
+
+-}
+
+fv :: Term2 -> Set Name
+fv (Variable2    x     ) = singleton x
+fv (Abstraction2 (a, b)) = a `delete` fv b
+fv (Application2 (a, b)) = fv a `union` fv b
+
+nextAvailableName :: Name -> Name
+nextAvailableName "z" = "aa"
+nextAvailableName (splitAt =<< (Prelude.subtract 1 . length) -> (front, Prelude.head -> l)) | l == 'z'  = nextAvailableName front ++ "a"
+                                                                                            | otherwise = front ++ [Prelude.succ l]
+
+subst :: Term2 -> (Name, Term2) -> Term2
+subst (Application2 (a, b)) t = Application2 (subst a t, subst b t)
+subst x@(Abstraction2 (a, b)) t0@(n, t) | a /= n && a `notMember` fv t = Abstraction2 (a, subst b t0)
+                                        | a `member` fv t              = subst (Abstraction2 (avoidCapture a, subst b (a, Variable2 (avoidCapture a)))) t0
+                                        | otherwise                    = x
+  where
+    avoidCapture n | n `member` (fv b `union` fv t) = avoidCapture (nextAvailableName n)
+                   | otherwise                      = n
+subst x@(Variable2 a) (b, t) | a /= b    = x
+                             | otherwise = t
+
+-- | eval function, full β-reduction
+evalFull :: Term2 -> Term2
+evalFull x@(Variable2    _                             ) = x
+evalFull (  Abstraction2 (a            , b            )) = Abstraction2 (a, evalFull b)
+evalFull (  Application2 (evalFull -> a, evalFull -> b)) = case a of
+    Abstraction2 (x, y) -> evalFull (subst y (x, b))
+    _                   -> Application2 (a, b)
+
+-- | eval function, normal order (small-step implementation)
+evalNormal :: Term2 -> Term2
+evalNormal = flip maybe evalNormal <*> go
+  where
+    go (Variable2    _     ) = Nothing
+    go (Application2 (a, b)) = case a of
+        Abstraction2 (x, y) -> Just (subst y (x, b))
+        x                   -> do
+            a' <- go a
+            return (Application2 (a', b))
+    go (Abstraction2 (a, b)) = do
+        b' <- go b
+        return (Abstraction2 (a, b'))
+
+-- | eval function, call-by-name (small-step implementation)
+evalCallByName :: Term2 -> Term2
+evalCallByName = flip maybe evalCallByName <*> go
+  where
+    go (Variable2    _     ) = Nothing
+    go (Application2 (a, b)) = case a of
+        Abstraction2 (x, y) -> Just (subst y (x, b))
+        x                   -> do
+            a' <- go a
+            return (Application2 (a', b))
+    go (Abstraction2 (a, b)) = Nothing
+
+-- | eval function, lazy evaluation (small-step implementation)
+evalLazy :: Term2 -> (Term2, HashMap Name Term2)
+evalLazy = flip runState empty . evalLazy'
+  where
+    evalLazy' = (>>=) . go <*> flip maybe evalLazy' . return
+    go :: Term2 -> State (HashMap Name Term2) (Maybe Term2)
+    go (Variable2    _     ) = return Nothing
+    go (Application2 (a, b)) = case a of
+        Variable2 n -> do
+            sharing <- get
+            thunk <- (\x -> maybe (return x) go x) (lookup n sharing)
+            when (isJust thunk) (modify (insert n (fromJust thunk)))
+            case thunk of
+                Just (Abstraction2 (x, y)) -> case b of
+                    Variable2 _ -> return (Just (subst y (x, b)))
+                    _           -> do
+                        modify (insert x b)
+                        return (Just y)
+                _ -> return Nothing
+        Abstraction2 (x, y) -> do
+            modify (insert x b)
+            return (Just y)
+    go (Abstraction2 (a, b)) = fmap (Abstraction2 . (a, )) <$> go b

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2b27ed02b458ef882149f7c3c8bb88ab90b816302a9d30f89bac93bb56a3367c
+-- hash: abee12cf0b66dc9278b9a888d042c3d8267d3f858747f9c18a7646cd739d9ee6
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -37,6 +37,10 @@ library
       QuickCheck
     , base >=4.7 && <5
     , containers
+    , mtl
+    , text
+    , text-format
+    , unordered-containers
   default-language: Haskell2010
 
 executable TAPL-Practice-exe
@@ -51,6 +55,10 @@ executable TAPL-Practice-exe
     , TAPL-Practice
     , base >=4.7 && <5
     , containers
+    , mtl
+    , text
+    , text-format
+    , unordered-containers
   default-language: Haskell2010
 
 test-suite TAPL-Practice-test
@@ -66,4 +74,8 @@ test-suite TAPL-Practice-test
     , TAPL-Practice
     , base >=4.7 && <5
     , containers
+    , mtl
+    , text
+    , text-format
+    , unordered-containers
   default-language: Haskell2010

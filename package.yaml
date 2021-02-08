@@ -23,6 +23,10 @@ dependencies:
 - base >= 4.7 && < 5
 - QuickCheck
 - containers
+- text-format
+- text
+- mtl
+- unordered-containers
 
 library:
   source-dirs: src
