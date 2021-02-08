@@ -4,6 +4,7 @@
 module UntypedLambdaCalculus where
 
 
+import           Control.Monad                  ( when )
 import           Control.Monad.State.Lazy       ( State
                                                 , StateT
                                                 , get
@@ -15,7 +16,11 @@ import           Data.HashMap.Lazy              ( HashMap
                                                 , insert
                                                 , lookup
                                                 )
-import           Data.Maybe                     ( fromMaybe, isNothing, isJust, fromJust )
+import           Data.Maybe                     ( fromJust
+                                                , fromMaybe
+                                                , isJust
+                                                , isNothing
+                                                )
 import           Data.Set                       ( Set
                                                 , delete
                                                 , member
@@ -36,7 +41,6 @@ import           Prelude                 hiding ( and
                                                 , tail
                                                 )
 import qualified Prelude
-import Control.Monad (when)
 
 type Name = String
 
@@ -479,9 +483,9 @@ x y
 -- (λz. (λx. x) z)
 
 >>> evalLazy (Application2 (id2, Application2 (id2, Abstraction2 ("z", Application2 (id2, Variable2 "z")))))
-(Variable2 "x",fromList [("x",Application2 (Abstraction2 ("x",Variable2 "x"),Abstraction2 ("z",Application2 (Abstraction2 ("x",Variable2 "x"),Variable2 "z"))))])
+(Abstraction2 ("z",Application2 (Abstraction2 ("x",Variable2 "x"),Variable2 "z")),fromList [("x",Abstraction2 ("z",Application2 (Abstraction2 ("x",Variable2 "x"),Variable2 "z")))])
 
--- x => (λx. x) (λz. (λx. x) z)
+-- (λz. (λx. x) z)
 
 -}
 
@@ -542,15 +546,20 @@ evalCallByName = flip maybe evalCallByName <*> go
 
 -- | eval function, lazy evaluation (small-step implementation)
 evalLazy :: Term2 -> (Term2, HashMap Name Term2)
-evalLazy = flip runState empty . evalLazy'
+evalLazy = flip evalLazy' empty
   where
-    evalLazy' = (>>=) . go <*> flip maybe evalLazy' . return
+    evalLazy' x e =
+        let (result, sharing) = runState (chainEval x) e
+        in  case result of
+                Variable2 n -> let st = fromJust (lookup n sharing) in evalLazy' st sharing
+                _           -> (result, sharing)
+    chainEval = (>>=) . go <*> flip maybe chainEval . return
     go :: Term2 -> State (HashMap Name Term2) (Maybe Term2)
     go (Variable2    _     ) = return Nothing
     go (Application2 (a, b)) = case a of
         Variable2 n -> do
             sharing <- get
-            thunk <- (\x -> maybe (return x) go x) (lookup n sharing)
+            thunk   <- (\x -> maybe (return x) go x) (lookup n sharing)
             when (isJust thunk) (modify (insert n (fromJust thunk)))
             case thunk of
                 Just (Abstraction2 (x, y)) -> case b of
@@ -562,4 +571,4 @@ evalLazy = flip runState empty . evalLazy'
         Abstraction2 (x, y) -> do
             modify (insert x b)
             return (Just y)
-    go (Abstraction2 (a, b)) = fmap (Abstraction2 . (a, )) <$> go b
+    go (Abstraction2 (a, b)) = return Nothing
