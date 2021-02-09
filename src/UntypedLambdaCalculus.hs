@@ -640,3 +640,8 @@ subst' (Index k) (j, s) | k == j    = s
                         | otherwise = Index k
 subst' (Abstraction3 t1   ) (j, s) = Abstraction3 (subst' t1 (succ j, shift 1 0 s))
 subst' (Application3 t1 t2) p      = Application3 (subst' t1 p) (subst' t2 p)
+
+eval :: Term3 -> Term3
+eval (Index x) = Index x
+eval (Abstraction3 t) = Abstraction3 (eval t)
+eval (Application3 a b) = eval (shift (-1) 0 (subst' a (0, shift 1 0 b)))
