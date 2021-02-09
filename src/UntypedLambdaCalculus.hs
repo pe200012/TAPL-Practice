@@ -4,6 +4,7 @@
 module UntypedLambdaCalculus where
 
 
+import           Control.Applicative            ( (<|>) )
 import           Control.Monad                  ( when )
 import           Control.Monad.State.Lazy       ( State
                                                 , StateT
@@ -13,9 +14,11 @@ import           Control.Monad.State.Lazy       ( State
                                                 )
 import           Data.HashMap.Lazy              ( HashMap
                                                 , empty
+                                                , fromList
                                                 , insert
                                                 , lookup
                                                 )
+import           Data.List                      ( elemIndex )
 import           Data.Maybe                     ( fromJust
                                                 , fromMaybe
                                                 , isJust
@@ -572,3 +575,68 @@ evalLazy = flip evalLazy' empty
             modify (insert x b)
             return (Just y)
     go (Abstraction2 (a, b)) = return Nothing
+
+type Context = HashMap String Int
+
+data Term3 = Index Int
+           | Abstraction3 Term3
+           | Application3 Term3 Term3
+           deriving Show
+
+prettyTerm3 :: Term3 -> String
+prettyTerm3 (Index        i  ) = show i
+prettyTerm3 (Abstraction3 t  ) = unpack (format "(λ. {})" [prettyTerm3 t])
+prettyTerm3 (Application3 a b) = unpack (format "{} {}" (prettyTerm3 <$> [a, b]))
+
+{-
+
+>>> showHelper = error . prettyTerm3 :: Term3 -> ()
+>>> showHelper2 = error . prettyTerm2 :: Term2 -> ()
+
+>>> cxt = fromList (zip (pure <$> ['a'..'z']) [0..]) :: Context
+
+>>> showHelper (removenames (Variable2 "a") cxt)
+0
+
+>>> showHelper (removenames (Abstraction2 ("x", Abstraction2 ("y", Application2 (Variable2 "x", Variable2 "y")))) cxt)
+(λ. (λ. 1 0))
+
+>>> showHelper (removenames (Abstraction2 ("x", Abstraction2 ("y", Application2 (Variable2 "x", Variable2 "z")))) cxt)
+(λ. (λ. 1 25))
+
+>>> showHelper2 (restorenames (removenames (Abstraction2 ("x", Abstraction2 ("y", Application2 (Variable2 "x", Variable2 "y")))) cxt)) :: ()
+(λa. (λb. a b))
+
+>>> showHelper (shift 2 0 (Abstraction3 (Abstraction3 (Application3 (Index 1) (Application3 (Index 0) (Index 2))))))
+(λ. (λ. 1 0 4))
+
+>>> showHelper (shift 2 0 (Abstraction3 (Application3 (Application3 (Index 0) (Index 1)) (Abstraction3 (Application3 (Application3 (Index 0) (Index 1)) (Index 2))))))
+(λ. 0 3 (λ. 0 1 4))
+
+-}
+
+removenames :: Term2 -> Context -> Term3
+removenames t cxt = go [] t
+  where
+    go currentBV (Variable2    n     ) = fromJust (Index <$> (elemIndex n currentBV <|> lookup n cxt))
+    go currentBV (Abstraction2 (n, t)) = Abstraction3 (go (n : currentBV) t)
+    go currentBV (Application2 (a, b)) = Application3 (go currentBV a) (go currentBV b)
+
+restorenames :: Term3 -> Term2
+restorenames = go []
+  where
+    go currentBV (Index        i) = Variable2 (currentBV !! i)
+    go currentBV (Abstraction3 t) = Abstraction2 (n, go (n : currentBV) t)
+        where n = if null currentBV then "a" else nextAvailableName (Prelude.head currentBV)
+    go currentBV (Application3 a b) = Application2 (go currentBV a, go currentBV b)
+
+shift :: Int -> Int -> Term3 -> Term3
+shift distance cutoff (Index        i  ) = Index (if i < cutoff then i else i + distance)
+shift distance cutoff (Abstraction3 t  ) = Abstraction3 (shift distance (succ cutoff) t)
+shift distance cutoff (Application3 a b) = Application3 (shift distance cutoff a) (shift distance cutoff b)
+
+subst' :: Term3 -> (Int, Term3) -> Term3
+subst' (Index k) (j, s) | k == j    = s
+                        | otherwise = Index k
+subst' (Abstraction3 t1   ) (j, s) = Abstraction3 (subst' t1 (succ j, shift 1 0 s))
+subst' (Application3 t1 t2) p      = Application3 (subst' t1 p) (subst' t2 p)
