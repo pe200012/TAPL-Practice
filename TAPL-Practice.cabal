@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: abee12cf0b66dc9278b9a888d042c3d8267d3f858747f9c18a7646cd739d9ee6
+-- hash: e87b407a25cada36a13e9688236f9bebcd7d8333dc89135db1d2d7894bc0911f
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Simple
+      SimplyTypedLambdaCalculus
       UntypedLambdaCalculus
   other-modules:
       Paths_TAPL_Practice
@@ -41,6 +42,7 @@ library
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 executable TAPL-Practice-exe
@@ -59,6 +61,7 @@ executable TAPL-Practice-exe
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 test-suite TAPL-Practice-test
@@ -78,4 +81,5 @@ test-suite TAPL-Practice-test
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
