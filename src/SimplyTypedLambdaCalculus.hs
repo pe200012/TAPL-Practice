@@ -72,6 +72,9 @@ Right "SimpleBool -> SimpleBool"
 >>> prettytypeof (SimpleAbs SimpleBool arr) cxt
 Right "SimpleBool -> SimpleBool -> SimpleBool"
 
+>>> prettytypeof (SimpleAbs SimpleBool (SimpleVar 0 0)) cxt
+Right "SimpleBool -> SimpleBool"
+
 >>> prettytypeof (SimpleApp arr SimpleTrue) cxt
 Right "SimpleBool"
 
@@ -80,6 +83,9 @@ Left "typeof, expected SimpleArrow type, but got (SimpleTrue: SimpleBool)"
 
 >>> prettytypeof (SimpleApp arr arr) cxt
 Left "typeof, arrow parameter type mismatch: expected SimpleBool, but got (SimpleAbs SimpleBool SimpleTrue: SimpleBool -> SimpleBool)"
+
+>>> prettytypeof (SimpleAbs (SimpleArrow SimpleBool SimpleBool) arr) cxt
+Right "(SimpleBool -> SimpleBool) -> SimpleBool -> SimpleBool"
 
 -}
 
