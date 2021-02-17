@@ -104,6 +104,9 @@ Right "(SimpleBool -> SimpleBool) -> SimpleBool -> SimpleBool"
 >>> prettytypeof (SimpleLet "x" SimpleTrue (SimpleVar "x")) cxt
 Right "SimpleBool"
 
+>>> prettytypeof (SimpleLet "x" SimpleTrue (SimpleAbs "y" SimpleBool (SimpleVar "x"))) cxt
+Right "SimpleBool -> SimpleBool"
+
 >>> showHelper (erase SimpleTrue (HashMap.fromList []))
 (λ. (λ. 1))
 
@@ -179,11 +182,14 @@ typeof t cxt = case t of
 erase :: Term -> HashMap String Int -> UTLC.Term3
 erase t c = erase' [] t
   where
-    erase' _ SimpleTrue  = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 1))
-    erase' _ SimpleFalse = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 0))
+    erase' _  SimpleTrue        = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 1))
+    erase' _  SimpleFalse       = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 0))
     erase' bv Unit              = erase' bv SimpleFalse
     erase' bv (SimpleIf g a b ) = UTLC.Application3 (UTLC.Application3 (erase' bv g) (erase' bv a)) (erase' bv b)
     erase' bv (SimpleVar n    ) = fromJust (UTLC.Index <$> (elemIndex n bv <|> lookup n c))
     erase' bv (SimpleLet n a b) = UTLC.Application3 (UTLC.Abstraction3 (erase' (n : bv) b)) (erase' bv a)
     erase' bv (SimpleAbs n _ t) = UTLC.Abstraction3 (erase' (n : bv) t)
     erase' bv (SimpleApp a b  ) = UTLC.Application3 (erase' bv a) (erase' bv b)
+
+eval :: Term -> HashMap String Int -> UTLC.Term3
+eval = (.) UTLC.eval . erase
