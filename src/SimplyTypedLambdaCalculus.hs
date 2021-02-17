@@ -15,7 +15,9 @@ import           Data.Set                       ( Set
                                                 , union
                                                 )
 import qualified Data.Set                      as Set
-import           Data.Text.Format               ( format )
+import           Data.Text.Format               ( Format
+                                                , format
+                                                )
 import           Data.Text.Lazy                 ( unpack )
 import           Prelude                 hiding ( lookup )
 import qualified UntypedLambdaCalculus         as UTLC
@@ -24,6 +26,7 @@ newtype Context = Context { unContext :: HashMap String SimpleType } deriving Sh
 
 data SimpleType = SimpleBool
                 | SimpleUnit
+                | SimpleProduct SimpleType SimpleType
                 | SimpleArrow SimpleType SimpleType
                 deriving (Show, Eq)
 
@@ -35,6 +38,9 @@ data Term = SimpleTrue
           | SimpleLet String Term Term
           | SimpleAbs String SimpleType Term
           | SimpleApp Term Term
+          | SimplePair Term Term
+          | SimpleFst Term
+          | SimpleSnd Term
           deriving Show
 
 {-
@@ -107,6 +113,21 @@ Right "SimpleBool"
 >>> prettytypeof (SimpleLet "x" SimpleTrue (SimpleAbs "y" SimpleBool (SimpleVar "x"))) cxt
 Right "SimpleBool -> SimpleBool"
 
+>>> prettytypeof (SimplePair SimpleTrue SimpleFalse) cxt
+Right "SimpleBool * SimpleBool"
+
+>>> prettytypeof (SimplePair SimpleTrue arr) cxt
+Right "SimpleBool * (SimpleBool -> SimpleBool)"
+
+>>> prettytypeof (SimplePair arr arr) cxt
+Right "(SimpleBool -> SimpleBool) * (SimpleBool -> SimpleBool)"
+
+>>> prettytypeof (SimpleFst (SimplePair SimpleTrue arr)) cxt
+Right "SimpleBool"
+
+>>> prettytypeof (SimpleSnd (SimplePair SimpleTrue arr)) cxt
+Right "SimpleBool -> SimpleBool"
+
 >>> showHelper (erase SimpleTrue (HashMap.fromList []))
 (λ. (λ. 1))
 
@@ -128,11 +149,14 @@ fv (SimpleLet n a b) = fv a `union` Set.delete n (fv b)
 fv (SimpleAbs n _ t) = Set.delete n (fv t)
 fv (SimpleApp a b  ) = fv a `union` fv b
 
+sealArrow :: SimpleType -> Format
+sealArrow (SimpleArrow _ _) = "({})"
+sealArrow _                 = "{}"
+
 prettyprintSimpleType :: SimpleType -> String
-prettyprintSimpleType SimpleBool          = "SimpleBool"
-prettyprintSimpleType (SimpleArrow t1 t2) = case t1 of
-    SimpleArrow _ _ -> unpack (format "({}) -> {}" (prettyprintSimpleType <$> [t1, t2]))
-    _               -> unpack (format "{} -> {}" (prettyprintSimpleType <$> [t1, t2]))
+prettyprintSimpleType SimpleBool            = "SimpleBool"
+prettyprintSimpleType (SimpleProduct t1 t2) = unpack (format (sealArrow t1 <> " * " <> sealArrow t2) (prettyprintSimpleType <$> [t1, t2]))
+prettyprintSimpleType (SimpleArrow   t1 t2) = unpack (format (sealArrow t1 <> " -> {}") (prettyprintSimpleType <$> [t1, t2]))
 
 context :: HashMap String SimpleType -> Context
 context = Context
@@ -178,6 +202,18 @@ typeof t cxt = case t of
                         )
                     )
             _ -> Left (unpack (format "typeof, expected SimpleArrow type, but got ({}: {})" [show t1, prettyprintSimpleType t1']))
+    SimplePair t1 t2 -> SimpleProduct <$> typeof t1 cxt <*> typeof t2 cxt
+    SimpleFst t      -> do
+        t' <- typeof t cxt
+        case t' of
+            SimpleProduct a _ -> Right a
+            _                 -> Left (unpack (format "typeof, expected SimplePair type, but got ({}: {})" [show t, prettyprintSimpleType t']))
+    SimpleSnd t -> do
+        t' <- typeof t cxt
+        case t' of
+            SimpleProduct _ b -> Right b
+            _                 -> Left (unpack (format "typeof, expected SimplePair type, but got ({}: {})" [show t, prettyprintSimpleType t']))
+
 
 erase :: Term -> HashMap String Int -> UTLC.Term3
 erase t c = erase' [] t
@@ -189,7 +225,10 @@ erase t c = erase' [] t
     erase' bv (SimpleVar n    ) = fromJust (UTLC.Index <$> (elemIndex n bv <|> lookup n c))
     erase' bv (SimpleLet n a b) = UTLC.Application3 (UTLC.Abstraction3 (erase' (n : bv) b)) (erase' bv a)
     erase' bv (SimpleAbs n _ t) = UTLC.Abstraction3 (erase' (n : bv) t)
-    erase' bv (SimpleApp a b  ) = UTLC.Application3 (erase' bv a) (erase' bv b)
+    erase' bv (SimpleApp  a b ) = UTLC.Application3 (erase' bv a) (erase' bv b)
+    erase' bv (SimplePair a b ) = UTLC.Abstraction3 (UTLC.Application3 (UTLC.Application3 (UTLC.Index 0) (erase' bv a)) (erase' bv b))
+    erase' bv (SimpleFst a    ) = UTLC.Application3 (erase' bv a) (erase' bv SimpleTrue)
+    erase' bv (SimpleSnd a    ) = UTLC.Application3 (erase' bv a) (erase' bv SimpleFalse)
 
 eval :: Term -> HashMap String Int -> UTLC.Term3
 eval = (.) UTLC.eval . erase
