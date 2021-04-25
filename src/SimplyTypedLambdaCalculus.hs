@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 module SimplyTypedLambdaCalculus where
 
@@ -8,9 +9,12 @@ import           Data.HashMap.Lazy              ( HashMap
                                                 , lookup
                                                 )
 import qualified Data.HashMap.Lazy             as HashMap
+import qualified Data.HashMap.Lazy             as Map
 import           Data.List                      ( elemIndex )
 import           Data.Maybe                     ( fromJust )
 import           Data.Set                       ( Set
+                                                , member
+                                                , notMember
                                                 , singleton
                                                 , union
                                                 )
@@ -20,7 +24,6 @@ import           Data.Text.Format               ( Format
                                                 )
 import           Data.Text.Lazy                 ( unpack )
 import           Prelude                 hiding ( lookup )
-import qualified UntypedLambdaCalculus         as UTLC
 
 newtype Context = Context { unContext :: HashMap String SimpleType } deriving Show
 
@@ -45,7 +48,6 @@ data Term = SimpleTrue
 
 {-
 
->>> showHelper = error . UTLC.prettyTerm3 :: UTLC.Term3 -> ()
 >>> cxt = context (HashMap.fromList [])
 >>> bind "a" SimpleBool cxt
 Context {unContext = fromList [("a",SimpleBool)]}
@@ -128,15 +130,6 @@ Right "SimpleBool"
 >>> prettytypeof (SimpleSnd (SimplePair SimpleTrue arr)) cxt
 Right "SimpleBool -> SimpleBool"
 
->>> showHelper (erase SimpleTrue (HashMap.fromList []))
-(λ. (λ. 1))
-
->>> showHelper (erase arr (HashMap.fromList []))
-(λ. (λ. (λ. 1)))
-
->>> showHelper (erase (SimpleAbs "x" (SimpleArrow SimpleBool SimpleBool) arr) (HashMap.fromList []))
-(λ. (λ. (λ. (λ. 1))))
-
 -}
 
 fv :: Term -> Set String
@@ -147,7 +140,10 @@ fv (SimpleIf a b c ) = fv a `union` fv b `union` fv c
 fv (SimpleVar n    ) = singleton n
 fv (SimpleLet n a b) = fv a `union` Set.delete n (fv b)
 fv (SimpleAbs n _ t) = Set.delete n (fv t)
-fv (SimpleApp a b  ) = fv a `union` fv b
+fv (SimpleApp  a b ) = fv a `union` fv b
+fv (SimplePair a b ) = fv a `union` fv b
+fv (SimpleFst t    ) = fv t
+fv (SimpleSnd t    ) = fv t
 
 sealArrow :: SimpleType -> Format
 sealArrow (SimpleArrow _ _) = "({})"
@@ -157,9 +153,13 @@ prettyprintSimpleType :: SimpleType -> String
 prettyprintSimpleType SimpleBool            = "SimpleBool"
 prettyprintSimpleType (SimpleProduct t1 t2) = unpack (format (sealArrow t1 <> " * " <> sealArrow t2) (prettyprintSimpleType <$> [t1, t2]))
 prettyprintSimpleType (SimpleArrow   t1 t2) = unpack (format (sealArrow t1 <> " -> {}") (prettyprintSimpleType <$> [t1, t2]))
+prettyprintSimpleType SimpleUnit            = "SimpleUnit"
 
 context :: HashMap String SimpleType -> Context
 context = Context
+
+emptyContext :: Context
+emptyContext = Context (HashMap.fromList [])
 
 bind :: String -> SimpleType -> Context -> Context
 bind n t = Context . insert n t . unContext
@@ -214,21 +214,123 @@ typeof t cxt = case t of
             SimpleProduct _ b -> Right b
             _                 -> Left (unpack (format "typeof, expected SimplePair type, but got ({}: {})" [show t, prettyprintSimpleType t']))
 
+{-
 
-erase :: Term -> HashMap String Int -> UTLC.Term3
-erase t c = erase' [] t
+>>> eval SimpleTrue
+SimpleTrue
+
+>>> eval SimpleFalse
+SimpleFalse
+
+>>> eval Unit
+Unit
+
+>>> eval $ SimpleIf SimpleTrue (SimpleAbs "x" SimpleUnit SimpleTrue) (SimpleAbs "y" SimpleUnit SimpleFalse)
+SimpleAbs "x" SimpleUnit SimpleTrue
+
+>>> eval $ SimpleIf SimpleFalse (SimpleAbs "x" SimpleUnit SimpleTrue) (SimpleAbs "y" SimpleUnit SimpleFalse)
+SimpleAbs "y" SimpleUnit SimpleFalse
+
+>>> eval $ SimpleIf Unit SimpleTrue SimpleFalse
+typeof, if-guard type mismatch: expected Boolean, but got (Unit: SimpleUnit)
+
+>>> eval $ SimpleIf SimpleTrue SimpleFalse Unit
+typeof, if-branch type mismatch: then SimpleBool, else SimpleUnit
+
+>>> eval $ SimpleVar "x"
+typeof, error when getting type of variable: x
+
+>>> eval $ SimpleLet "x" Unit (SimpleVar "x")
+Unit
+
+>>> eval $ SimpleLet "x" Unit (SimpleLet "x" SimpleTrue (SimpleVar "x"))
+SimpleTrue
+
+>>> eval $ SimpleAbs "x" SimpleBool (SimpleIf (SimpleVar "x") SimpleTrue SimpleFalse)
+SimpleAbs "x" SimpleBool (SimpleIf (SimpleVar "x") SimpleTrue SimpleFalse)
+
+>>> eval $ SimpleApp (SimpleAbs "x" SimpleBool (SimpleIf (SimpleVar "x") SimpleTrue SimpleFalse)) SimpleTrue
+SimpleTrue
+
+>>> eval $ SimplePair SimpleTrue Unit
+SimplePair SimpleTrue Unit
+
+>>> eval $ SimpleFst $ SimplePair SimpleTrue Unit
+SimpleTrue
+
+>>> eval $ SimpleSnd $ SimplePair SimpleTrue Unit
+Unit
+
+-}
+
+eval :: Term -> Term
+eval t = case typeof t emptyContext of
+    Left  x -> error x
+    Right _ -> stepWrap (Right (Map.empty, t))
   where
-    erase' _  SimpleTrue        = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 1))
-    erase' _  SimpleFalse       = UTLC.Abstraction3 (UTLC.Abstraction3 (UTLC.Index 0))
-    erase' bv Unit              = erase' bv SimpleFalse
-    erase' bv (SimpleIf g a b ) = UTLC.Application3 (UTLC.Application3 (erase' bv g) (erase' bv a)) (erase' bv b)
-    erase' bv (SimpleVar n    ) = fromJust (UTLC.Index <$> (elemIndex n bv <|> lookup n c))
-    erase' bv (SimpleLet n a b) = UTLC.Application3 (UTLC.Abstraction3 (erase' (n : bv) b)) (erase' bv a)
-    erase' bv (SimpleAbs n _ t) = UTLC.Abstraction3 (erase' (n : bv) t)
-    erase' bv (SimpleApp  a b ) = UTLC.Application3 (erase' bv a) (erase' bv b)
-    erase' bv (SimplePair a b ) = UTLC.Abstraction3 (UTLC.Application3 (UTLC.Application3 (UTLC.Index 0) (erase' bv a)) (erase' bv b))
-    erase' bv (SimpleFst a    ) = UTLC.Application3 (erase' bv a) (erase' bv SimpleTrue)
-    erase' bv (SimpleSnd a    ) = UTLC.Application3 (erase' bv a) (erase' bv SimpleFalse)
-
-eval :: Term -> HashMap String Int -> UTLC.Term3
-eval = (.) UTLC.eval . erase
+    stepWrap = either id (stepWrap . uncurry step)
+    step _   SimpleTrue       = Left SimpleTrue
+    step _   SimpleFalse      = Left SimpleFalse
+    step _   Unit             = Left Unit
+    step cxt (SimpleIf g a b) = case step cxt g of
+        Left g' -> case g' of
+            SimpleTrue  -> Right (cxt, a)
+            SimpleFalse -> Right (cxt, b)
+            _           -> error "SimpleIf: impossible to reach here"
+        Right (cxt', g'') -> Right (cxt', SimpleIf g'' a b)
+    step cxt (SimpleVar s    ) = Right (cxt, fromJust (lookup s cxt))
+    step cxt (SimpleLet n a b) = case step (Map.insert n a cxt) b of
+        Left  x       -> Left x
+        Right (_, x') -> Right (cxt, x')
+    step cxt abs@SimpleAbs{} = Left abs
+    step cxt (SimpleApp a b) = case step cxt a of
+        Right (cxt', a')        -> Right (cxt', SimpleApp a' b)
+        Left  (SimpleAbs n t x) -> case step cxt b of
+            Right (cxt'', b') -> Right (cxt'', SimpleApp a b')
+            Left  b''         -> Right (cxt, subst (n, b) x)
+        Left _ -> error "SimpleApp: impossible to reach here"
+      where
+        rename _ SimpleTrue       = SimpleTrue
+        rename _ SimpleFalse      = SimpleFalse
+        rename _ Unit             = Unit
+        rename p (SimpleIf g a b) = SimpleIf (rename p g) (rename p a) (rename p b)
+        rename (n, n0) (SimpleVar n') | n == n'   = SimpleVar n0
+                                      | otherwise = SimpleVar n'
+        rename p@(n, _) (SimpleLet n' a b) | n == n'   = SimpleLet n' a' b
+                                           | otherwise = SimpleLet n' a' (rename p b)
+            where a' = rename p a
+        rename p@(n, _) (SimpleAbs n' t a) | n == n'   = SimpleAbs n' t a
+                                           | otherwise = SimpleAbs n' t (rename p a)
+        rename p (SimpleApp  a b) = SimpleApp (rename p a) (rename p b)
+        rename p (SimplePair a b) = SimplePair (rename p a) (rename p b)
+        rename p (SimpleFst a   ) = SimpleFst (rename p a)
+        rename p (SimpleSnd a   ) = SimpleSnd (rename p a)
+        subst _ SimpleTrue       = SimpleTrue
+        subst _ SimpleFalse      = SimpleFalse
+        subst _ Unit             = Unit
+        subst p (SimpleIf g a b) = SimpleIf (subst p g) (subst p a) (subst p b)
+        subst (b, x) (SimpleVar n) | n == b    = x
+                                   | otherwise = SimpleVar n
+        subst (b, x) (SimpleLet n a b') | n == b    = SimpleLet n a' b'
+                                        | otherwise = SimpleLet n a' (subst (b, x) b')
+            where a' = subst (b, x) a
+        subst (b, x) (SimpleAbs n t b') | n /= b && n `notMember` fv x = SimpleAbs n t (subst (b, x) b')
+                                        | n `member` fv x              = subst (b, x) (SimpleAbs (n ++ "'") t (rename (n, n ++ "'") b'))
+                                        | otherwise                    = SimpleAbs n t b'
+        subst (b, x) (SimpleApp  a b') = SimpleApp (subst (b, x) a) (subst (b, x) b')
+        subst (b, x) (SimplePair a b') = SimplePair (subst (b, x) a) (subst (b, x) b')
+        subst (b, x) (SimpleFst a    ) = SimpleFst (subst (b, x) a)
+        subst (b, x) (SimpleSnd a    ) = SimpleSnd (subst (b, x) a)
+    step cxt (SimplePair a b) = case step cxt a of
+        Right (cxt', a') -> Right (cxt', SimplePair a' b)
+        Left  a'         -> case step cxt b of
+            Right (cxt', b') -> Right (cxt', SimplePair a' b')
+            Left  b'         -> Left (SimplePair a' b')
+    step cxt (SimpleFst a) = case step cxt a of
+        Right (cxt', a')       -> Right (cxt', SimpleFst a')
+        Left  (SimplePair x _) -> Left x
+        Left  _                -> error "SimpleFst: Impossible to reach here"
+    step cxt (SimpleSnd a) = case step cxt a of
+        Right (cxt', a')       -> Right (cxt', SimpleFst a')
+        Left  (SimplePair _ x) -> Left x
+        Left  _                -> error "SimpleSnd: Impossible to reach here"

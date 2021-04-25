@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f6ac2cf315c2ae4a89fa0310f840573e8954303a328a7725376161a8f7e577cb
+-- hash: 6f13e9c42e26fa0a0cf5cc79f2982e5cedc654dea53089ce3598de0d8cba46bd
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -34,6 +34,7 @@ library
       Paths_TAPL_Practice
   hs-source-dirs:
       src
+  ghc-options: -Wall
   build-depends:
       QuickCheck
     , base >=4.7 && <5
@@ -50,7 +51,7 @@ executable TAPL-Practice-exe
       Paths_TAPL_Practice
   hs-source-dirs:
       app
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , TAPL-Practice
@@ -69,7 +70,7 @@ test-suite TAPL-Practice-test
       Paths_TAPL_Practice
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , TAPL-Practice
