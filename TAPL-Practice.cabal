@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6f13e9c42e26fa0a0cf5cc79f2982e5cedc654dea53089ce3598de0d8cba46bd
+-- hash: 6981e47531628c49d3438ad888d57d4b57835855b72238feadc5f106a6fac187
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      GC
       Simple
       SimplyTypedLambdaCalculus
       UntypedLambdaCalculus
