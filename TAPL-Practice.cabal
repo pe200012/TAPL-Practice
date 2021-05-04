@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6981e47531628c49d3438ad888d57d4b57835855b72238feadc5f106a6fac187
+-- hash: b149f635985781969cd0699bafc67ae785689f2b641b51779b2207c0737cbb3c
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 executable TAPL-Practice-exe
@@ -62,6 +63,7 @@ executable TAPL-Practice-exe
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 test-suite TAPL-Practice-test
@@ -81,4 +83,5 @@ test-suite TAPL-Practice-test
     , text
     , text-format
     , unordered-containers
+    , vector
   default-language: Haskell2010
