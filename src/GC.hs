@@ -3,9 +3,13 @@
 {-# LANGUAGE TupleSections #-}
 module GC where
 
-import           Control.Arrow                  ( first )
+import           Control.Arrow                  ( Arrow(second)
+                                                , first
+                                                )
+import           Control.Monad                  ( ap )
 import qualified Data.HashMap.Lazy             as Map
-import           Data.Maybe                     ( isJust
+import           Data.Maybe                     ( fromMaybe
+                                                , isJust
                                                 , isNothing
                                                 )
 import           Data.Set                       ( Set
@@ -57,7 +61,10 @@ lookupStore :: Int -> Store -> Maybe Term
 lookupStore i = Map.lookup i . unStore
 
 insertStore :: Term -> Store -> (Int, Store)
-insertStore x s = (storeCounter s + 1, s { unStore = Map.insert (storeCounter s) x (unStore s) })
+insertStore x s = (storeCounter s, s { unStore = Map.insert (storeCounter s) x (unStore s), storeCounter = storeCounter s + 1 })
+
+assignStore :: Int -> Term -> Store -> Store
+assignStore i t s = s { unStore = Map.insert i t (unStore s) }
 
 deleteStore :: Int -> Store -> Store
 deleteStore i s = s { unStore = Map.delete i (unStore s) }
@@ -136,7 +143,7 @@ typecheck = fmap fst . go [] Vector.empty
             _        -> Left $ unpack $ format "Type mismatch: expected Unit, but was given {}" [prettyType a']
     go cxt mu (Reference t) = do
         (t', mu') <- go cxt mu t
-        return (t', Vector.snoc mu' t')
+        return (Ref t', Vector.snoc mu' t')
     go cxt mu (Dereference t) = do
         (t', mu') <- go cxt mu t
         case t' of
@@ -150,7 +157,7 @@ typecheck = fmap fst . go [] Vector.empty
                 maybe (Left $ unpack $ format "Type mismatch: expected {}, but was given {}" (prettyType <$> [t, b'])) (return . (, mu'')) (typeRefine t b')
             _ -> Left $ unpack $ format "Type mismatch: expected Ref type, but was given {}" [prettyType a']
     go cxt mu (StoreLocation i) = case mu Vector.!? i of
-        Just t  -> Right (t, mu)
+        Just t  -> Right (Ref t, mu)
         Nothing -> Left $ unpack $ format "Invalid reference: {}" [prettyTerm (StoreLocation i)]
 
 fv :: Term -> Set String
@@ -192,15 +199,68 @@ subst x@(StoreLocation _     ) _  = x
 -- >>> evalCallByName (Application (Abstraction ("x", UnitType, Abstraction ("a", Any, Abstraction ("b", Any, Variable "a"))), Unit))
 -- Abstraction ("a",Any,Abstraction ("b",Any,Variable "a"))
 
+-- >>> evalCallByName (Application (Abstraction ("x", Ref UnitType, Unit), Reference Unit))
+-- Unit
+
+{-
+
+>>> lam name typ term = Abstraction (name, typ, term)
+>>> app = curry Application
+>>> tru = Abstraction ("x", Any, Abstraction ("y", Any, Variable "x"))
+>>> fls = Abstraction ("x", Any, Abstraction ("y", Any, Variable "y"))
+>>> if_ = Abstraction ("b", Any :->: (Any :->: Any), Abstraction ("x", Any, Abstraction ("y", Any, Application (Application (Variable "b", Variable "x"), Variable "y"))))
+>>> zero = fls
+>>> succ_ = lam "n" (Any :->: (Any :->: Any)) (lam "s" (Any :->: Any) (lam "z" (Any :->: (Any :->: Any)) (app (Variable "s") (app (app (Variable "n") (Variable "s")) (Variable "z")))))
+>>> one = lam "s" (Any :->: Any) (lam "z" Any (app (Variable "s") (Variable "z")))
+
+>>> typecheck <$> [tru,fls,if_]
+[Right (Any :->: (Any :->: Any)),Right (Any :->: (Any :->: Any)),Right ((Any :->: (Any :->: Any)) :->: (Any :->: (Any :->: Any)))]
+
+>>> typecheck zero
+Right (Any :->: (Any :->: Any))
+
+>>> typecheck (Application (succ_, zero))
+Right ((Any :->: Any) :->: ((Any :->: (Any :->: Any)) :->: Any))
+
+>>> typecheck (Reference tru)
+Right (Ref (Any :->: (Any :->: Any)))
+
+>>> evalCallByName (Application (Abstraction ("x", Ref (Any :->: (Any :->: Any)), Application (Application (Dereference (Variable "x"), zero), one)), Reference fls))
+Abstraction ("x",Any,Abstraction ("y",Any,Variable "y"))
+
+>>> evalCallByName (app (lam "x" (Ref UnitType) (Dereference (Variable "x"))) (Reference Unit))
+Unit
+
+>>> evalCallByName (app (lam "x" (Ref (Any :->: Any)) (app (Dereference (Variable "x")) one)) (Reference tru))
+Abstraction ("x",Any,Abstraction ("y",Any,Variable "x"))
+
+
+-}
 evalCallByName :: Term -> Term
-evalCallByName = either error . const . eval <*> typecheck
+evalCallByName = either error . const . eval emptyStore <*> typecheck
   where
-    eval = flip maybe eval <*> go
-    go (Variable    _     ) = Nothing
-    go (Application (a, b)) = case a of
-        Abstraction (x, _, y) -> Just (subst y (x, b))
-        x                     -> do
-            a' <- go a
-            return (Application (a', b))
-    go (Abstraction (a, _, b)) = Nothing
-    go Unit                    = Nothing
+    eval = ap (`maybe` uncurry eval) . go
+    go :: Store -> Term -> Maybe (Store, Term)
+    go store (Variable    _     ) = Nothing
+    go store (Application (a, b)) = case typecheck b of
+        Right (Ref _) -> Just (maybe app' (second (Application . (a, ))) (go store b))
+        _             -> Just app'
+      where
+        app' = flip fromMaybe (go store a) $ case a of
+            Abstraction (x, _, y) -> (store, subst y (x, b))
+            _                     -> error "eval: impossible to reach here(app)"
+    go store (Abstraction (a, _, b)) = Nothing
+    go store Unit                    = Nothing
+    go store (Sequential  (a, b))    = Just (maybe (store, b) (second (Sequential . (, b))) (go store a))
+    go store (Reference   t     )    = let (i, store') = insertStore t store in Just (store', StoreLocation i)
+    go store (Dereference i     )    = maybe deref (return . second Dereference) (go store i)
+      where
+        deref = case i of
+            StoreLocation index -> Just (maybe (error "eval: Reference not found") (store, ) (lookupStore index store))
+            _                   -> error "eval: impossible to reach here(defer)"
+    go store (Assignment (a, b)) = do
+        (s', a') <- go store a
+        case a' of
+            StoreLocation i -> Just (assignStore i b store, Unit)
+            _               -> error "eval: impossible to reach here(assign)"
+    go store (StoreLocation i) = Nothing
