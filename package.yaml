@@ -27,6 +27,7 @@ dependencies:
 - text
 - mtl
 - unordered-containers
+- megaparsec
 - vector
 
 library:

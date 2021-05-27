@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2dd8d9196d4bef311d2be6d4d366a194a1aec798f2b56501284c7d88689fea34
+-- hash: fc77eaf4043dcc466567984874b52e170e2b7f2d376c4412cbc0ca54d5331c61
 
 name:           TAPL-Practice
 version:        0.1.0.0
@@ -41,6 +41,7 @@ library
       QuickCheck
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , text
     , text-format
@@ -60,6 +61,7 @@ executable TAPL-Practice-exe
     , TAPL-Practice
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , text
     , text-format
@@ -80,6 +82,7 @@ test-suite TAPL-Practice-test
     , TAPL-Practice
     , base >=4.7 && <5
     , containers
+    , megaparsec
     , mtl
     , text
     , text-format

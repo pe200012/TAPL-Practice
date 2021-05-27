@@ -2,7 +2,21 @@
 module RecursiveType where
 
 import           Data.Text.Format               ( format )
-import           Data.Text.Lazy                 ( unpack )
+import           Data.Text.Lazy                 ( Text
+                                                , unpack
+                                                )
+import           Data.Void                      ( Void )
+import           Text.Megaparsec                ( (<|>)
+                                                , MonadParsec(try)
+                                                , Parsec
+                                                , choice
+                                                , many
+                                                , optional
+                                                )
+import           Text.Megaparsec.Char           ( char
+                                                , digitChar
+                                                , space
+                                                )
 
 data Term = Index Int
           | Abstraction Type Term
@@ -111,3 +125,30 @@ eval (     Unfold typ  t            ) = eval (Unfold typ (eval t))
 
 eval' :: Term -> Term
 eval' = either error . const . eval <*> typing
+
+type Parser = Parsec Void Text
+
+embrace :: Parser a -> Parser a
+embrace p = char '(' *> p <* char ')'
+
+lambdaParser :: Parser Term
+lambdaParser = do
+    char 'λ'
+    char '.'
+    Abstraction (Mu (TypeVariable 0)) <$> (try (embrace parser) <|> parser) -- TODO: infer type for lambda
+
+appParser :: Parser Term
+appParser = do
+    a <- try indexParser <|> embrace parser
+    space
+    b <- try indexParser <|> embrace parser
+    return (Application a b)
+
+indexParser :: Parser Term
+indexParser = do
+    c  <- digitChar
+    cs <- many digitChar
+    return . Index . read $ c : cs
+
+parser :: Parser Term
+parser = let p = try appParser <|> try lambdaParser <|> indexParser in try p <|> embrace p
