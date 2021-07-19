@@ -24,38 +24,43 @@ data Term = Index Int
           | Fix Term
           | Fold Type Term
           | Unfold Type Term
-           deriving Show
+          | MkTypeSynonym String Type Term
+    deriving Show
 
 data Type = Type :-> Type
           | TypeVariable Int
+          | TypeSynonym String
           | Mu Type
           | Unfolding (Type, [Type])
     deriving (Show, Eq)
 
 prettyTerm :: Term -> String
-prettyTerm (Index i          ) = show i
-prettyTerm (Abstraction typ t) = unpack (format "(λ{}. {})" [show typ, prettyTerm t])
-prettyTerm (Application a   b) = unpack (format "{} {}" (prettyTerm <$> [a, b]))
-prettyTerm (Fix t            ) = unpack (format "fixpoint ({})" [prettyTerm t])
-prettyTerm (Fold   typ t     ) = unpack (format "fold [{}] ({})" [show typ, prettyTerm t])
-prettyTerm (Unfold typ t     ) = unpack (format "unfold [{}] ({})" [show typ, prettyTerm t])
+prettyTerm (Index i                 ) = show i
+prettyTerm (Abstraction typ t       ) = unpack (format "(λ{}. {})" [show typ, prettyTerm t])
+prettyTerm (Application a   b       ) = unpack (format "{} {}" (prettyTerm <$> [a, b]))
+prettyTerm (Fix t                   ) = unpack (format "fixpoint ({})" [prettyTerm t])
+prettyTerm (Fold   typ t            ) = unpack (format "fold [{}] ({})" [show typ, prettyTerm t])
+prettyTerm (Unfold typ t            ) = unpack (format "unfold [{}] ({})" [show typ, prettyTerm t])
+prettyTerm (MkTypeSynonym name typ t) = unpack (format "{} with {} as {}" [name, show typ, prettyTerm t])
 
 shift :: Int -> Int -> Term -> Term
-shift distance cutoff (Index i          ) = Index (if i < cutoff then i else i + distance)
-shift distance cutoff (Abstraction typ t) = Abstraction typ (shift distance (succ cutoff) t)
-shift distance cutoff (Application a   b) = Application (shift distance cutoff a) (shift distance cutoff b)
-shift distance cutoff (Fix t            ) = Fix (shift distance cutoff t)
-shift distance cutoff (Fold   typ t     ) = Fold typ (shift distance cutoff t)
-shift distance cutoff (Unfold typ t     ) = Unfold typ (shift distance cutoff t)
+shift distance cutoff (Index i                 ) = Index (if i < cutoff then i else i + distance)
+shift distance cutoff (Abstraction typ t       ) = Abstraction typ (shift distance (succ cutoff) t)
+shift distance cutoff (Application a   b       ) = Application (shift distance cutoff a) (shift distance cutoff b)
+shift distance cutoff (Fix t                   ) = Fix (shift distance cutoff t)
+shift distance cutoff (Fold   typ t            ) = Fold typ (shift distance cutoff t)
+shift distance cutoff (Unfold typ t            ) = Unfold typ (shift distance cutoff t)
+shift distance cutoff (MkTypeSynonym name typ t) = MkTypeSynonym name typ (shift distance cutoff t)
 
 subst :: Term -> (Int, Term) -> Term
 subst (Index k) (j, s) | k == j    = s
                        | otherwise = Index k
-subst (Abstraction typ t1) (j, s) = Abstraction typ (subst t1 (succ j, shift 1 0 s))
-subst (Application t1  t2) p      = Application (subst t1 p) (subst t2 p)
-subst (Fix t             ) p      = Fix (subst t p)
-subst (Fold   typ t      ) p      = Fold typ (subst t p)
-subst (Unfold typ t      ) p      = Unfold typ (subst t p)
+subst (Abstraction typ t1      ) (j, s) = Abstraction typ (subst t1 (succ j, shift 1 0 s))
+subst (Application t1  t2      ) p      = Application (subst t1 p) (subst t2 p)
+subst (Fix t                   ) p      = Fix (subst t p)
+subst (Fold   typ t            ) p      = Fold typ (subst t p)
+subst (Unfold typ t            ) p      = Unfold typ (subst t p)
+subst (MkTypeSynonym name typ t) p      = MkTypeSynonym name typ (subst t p)
 
 typeshift :: Int -> Int -> Type -> Type
 typeshift distance cutoff (a :-> b                   ) = typeshift distance cutoff a :-> typeshift distance cutoff b
@@ -63,14 +68,16 @@ typeshift distance cutoff (TypeVariable i            ) = TypeVariable (if i < cu
 typeshift distance cutoff (Mu           t            ) = Mu (typeshift distance (succ cutoff) t)
 typeshift distance cutoff (Unfolding    (typ, []    )) = Unfolding (typeshift distance cutoff typ, [])
 typeshift distance cutoff (Unfolding    (typ, x : xs)) = typeshift distance cutoff (Unfolding (typesubst typ (0, x), xs))
+typeshift distance cutoff (TypeSynonym  name         ) = TypeSynonym name
 
 typesubst :: Type -> (Int, Type) -> Type
 typesubst (a :-> b) p = typesubst a p :-> typesubst b p
 typesubst (TypeVariable i) (j, k) | i == j    = k
                                   | otherwise = TypeVariable i
-typesubst (Mu        t            ) (i, j) = Mu (typesubst t (succ i, typeshift 1 0 j))
-typesubst (Unfolding (typ, []    )) p      = Unfolding (typesubst typ p, [])
-typesubst (Unfolding (typ, x : xs)) p      = typesubst (Unfolding (typesubst typ (0, x), xs)) p
+typesubst (Mu          t            ) (i, j) = Mu (typesubst t (succ i, typeshift 1 0 j))
+typesubst (Unfolding   (typ, []    )) p      = Unfolding (typesubst typ p, [])
+typesubst (Unfolding   (typ, x : xs)) p      = typesubst (Unfolding (typesubst typ (0, x), xs)) p
+typesubst (TypeSynonym name         ) p      = TypeSynonym name
 
 typesubst' :: Type -> Type -> Type
 typesubst' t u = typeshift (-1) 0 (typesubst (typeshift 1 0 t) (0, u))
