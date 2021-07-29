@@ -21,6 +21,11 @@
 - [ ] Subtyping
 - [ ] Recursive Types
 - [ ] Polymorphism
+  - [ ] Type Reconstruction
+    - [x] Constraint-Based Typing & Unification
+    - [ ] Principal Types & Incremental Unification
+    - [ ] Implicit Type Annotations
+    - [ ] Let-Polymorphism
 - [ ] Higher-Order Systems
 - [ ] Create a new toy language with all these features
 - [ ] **Important** Prove all the theorems in Coq
