@@ -29,6 +29,7 @@ dependencies:
 - unordered-containers
 - megaparsec
 - vector
+- lens
 
 library:
   source-dirs: src
